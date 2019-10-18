@@ -1,5 +1,5 @@
 import { parseExpression } from '@babel/parser'
-import { isArrowFunctionExpression, Expression, isObjectExpression, ObjectProperty, isObjectProperty, isIdentifier, SourceLocation, arrowFunctionExpression, isMemberExpression, MemberExpression } from '@babel/types'
+import { isArrowFunctionExpression, Expression, isObjectExpression, ObjectProperty, isObjectProperty, isIdentifier, SourceLocation, arrowFunctionExpression, isMemberExpression, MemberExpression, ObjectExpression, FunctionExpression, ArrowFunctionExpression, Identifier, Pattern, RestElement, TSParameterProperty, isFunctionExpression, isBlockStatement, isReturnStatement } from '@babel/types'
 import { Dictionary } from 'lodash';
 
 export interface SelectParseResult {
@@ -8,26 +8,43 @@ export interface SelectParseResult {
     dbKeys: string[]
 }
 export function parseSelectFunc(func: Function): SelectParseResult {
+    const tmp = func.toString();
     return parseSelectExpr(parseExpression(func.toString()))
 }
 //happy path
 function parseSelectExpr(expr: Expression): SelectParseResult {
-    if (!isArrowFunctionExpression(expr))
-        throw new Error('select function must be an Arrow Function')
-    const params = expr.params;
+    if(isArrowFunctionExpression(expr))
+        return parseSelectExprArrowFunc(expr);
+    if(isFunctionExpression(expr))
+        return parseSelectExprFunc(expr);
+    
+    throw Error('expression must be ArrowFunctionExpression or FunctionExpression ')
+    
+}
+function parseSelectExprArrowFunc(expr: ArrowFunctionExpression): SelectParseResult {
+    if (!isObjectExpression(expr.body))
+        throw Error('body must be ObjectExpression')
+
+    return parseSelectExprBody(expr.params, expr.body);    
+}
+function parseSelectExprFunc(expr: FunctionExpression): SelectParseResult {
+    if (isBlockStatement(expr.body) && isReturnStatement(expr.body.body[0]) && isObjectExpression(expr.body.body[0].argument)) {
+        return parseSelectExprBody(expr.params, expr.body.body[0].argument);
+        
+    }
+    throw new Error('function must only contain return statement')
+}
+function parseSelectExprBody(params: Array<Identifier | Pattern | RestElement | TSParameterProperty>, body: ObjectExpression): SelectParseResult {
     if (params.length < 1)
         throw Error('params < 1')
     if (!isIdentifier(params[0]))
         throw Error('params[0] not identifier')
 
     const tableAlias = params[0].name;
-    if (!isObjectExpression(expr.body))
-        throw Error('body must be ObjectExpression')
 
-    let map: Dictionary<string> = {};
     let objKeys: string[] = [];
     let dbKeys: string[] = [];
-    for (let prop of expr.body.properties) {
+    for (let prop of body.properties) {
         if (!isObjectProperty(prop))
             throw Error('expecting ObjectProperty')
 
@@ -40,10 +57,6 @@ function parseSelectExpr(expr: Expression): SelectParseResult {
         dbKeys
     };
 }
-
-// function parseSelectProp(prop: ObjectProperty, map: Dictionary<string>) {
-
-// }
 function getKeys(path: string | null, prop: ObjectProperty): string[] {
     const appendToPath = (name: string) => `${path != null ? `${path}.` : ''}${name}`
     if (!isIdentifier(prop.key))
