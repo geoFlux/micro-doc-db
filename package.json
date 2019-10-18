@@ -1,0 +1,23 @@
+{
+  "name": "micro-doc-db",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Jason Blake",
+  "license": "mit",
+  "devDependencies": {
+    "@babel/types": "^7.6.3",
+    "@types/lodash": "^4.14.144",
+    "@types/sqlite3": "^3.1.5",
+    "ts-node": "^8.4.1",
+    "typescript": "^3.6.4"
+  },
+  "dependencies": {
+    "@babel/parser": "^7.6.4",
+    "lodash": "^4.17.15",
+    "sqlite3": "^4.1.0"
+  }
+}
