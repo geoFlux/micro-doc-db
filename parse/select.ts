@@ -2,6 +2,8 @@ import { parseExpression } from '@babel/parser'
 import { isArrowFunctionExpression, Expression, isObjectExpression, ObjectProperty, isObjectProperty, isIdentifier, SourceLocation, arrowFunctionExpression, isMemberExpression, MemberExpression, ObjectExpression, FunctionExpression, ArrowFunctionExpression, Identifier, Pattern, RestElement, TSParameterProperty, isFunctionExpression, isBlockStatement, isReturnStatement } from '@babel/types'
 import { Dictionary } from 'lodash';
 
+//TODO: modify parseSelectFunc so it can accept multiple potential tables
+
 export interface SelectParseResult {
     tableAlias: string,
     objKeys: string[],
@@ -28,11 +30,15 @@ function parseSelectExprArrowFunc(expr: ArrowFunctionExpression): SelectParseRes
     return parseSelectExprBody(expr.params, expr.body);    
 }
 function parseSelectExprFunc(expr: FunctionExpression): SelectParseResult {
-    if (isBlockStatement(expr.body) && isReturnStatement(expr.body.body[0]) && isObjectExpression(expr.body.body[0].argument)) {
-        return parseSelectExprBody(expr.params, expr.body.body[0].argument);
+    if (!isBlockStatement(expr.body))
+        throw new Error('expected block statement function body')
+    if (!isReturnStatement(expr.body.body[0]))
+        throw new Error('expected single line return function body')
+    if (!isObjectExpression(expr.body.body[0].argument))
+        throw new Error('expected object expression in return statement')
+    
+    return parseSelectExprBody(expr.params, expr.body.body[0].argument);        
         
-    }
-    throw new Error('function must only contain return statement')
 }
 function parseSelectExprBody(params: Array<Identifier | Pattern | RestElement | TSParameterProperty>, body: ObjectExpression): SelectParseResult {
     if (params.length < 1)
@@ -81,9 +87,7 @@ function getKeys(path: string | null, prop: ObjectProperty): string[] {
 type getValuesOptions = {
     root?: string
 }
-function blah({ root }: getValuesOptions) {
 
-}
 
 
 function getValues(prop: ObjectProperty, opts: getValuesOptions): string[] {
