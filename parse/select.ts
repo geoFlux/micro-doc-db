@@ -1,13 +1,17 @@
 import { parseExpression } from '@babel/parser'
 import { isArrowFunctionExpression, Expression, isObjectExpression, ObjectProperty, isObjectProperty, isIdentifier, SourceLocation, arrowFunctionExpression, isMemberExpression, MemberExpression, ObjectExpression, FunctionExpression, ArrowFunctionExpression, Identifier, Pattern, RestElement, TSParameterProperty, isFunctionExpression, isBlockStatement, isReturnStatement } from '@babel/types'
 import { Dictionary } from 'lodash';
+import { ParseError } from '../custom-errors';
 
 //TODO: modify parseSelectFunc so it can accept multiple potential tables
 
 export interface SelectParseResult {
-    tableAlias: string,
+    tableAliases: string[],
     objKeys: string[],
-    dbKeys: string[]
+    dbKeys: {
+        jsonSelect: string,
+        tableAlias: string
+    }[]
 }
 export function parseSelectFunc(func: Function): SelectParseResult {
     const tmp = func.toString();
@@ -42,26 +46,40 @@ function parseSelectExprFunc(expr: FunctionExpression): SelectParseResult {
 }
 function parseSelectExprBody(params: Array<Identifier | Pattern | RestElement | TSParameterProperty>, body: ObjectExpression): SelectParseResult {
     if (params.length < 1)
-        throw Error('params < 1')
-    if (!isIdentifier(params[0]))
-        throw Error('params[0] not identifier')
+        throw Error('params < 1')    
 
-    const tableAlias = params[0].name;
+    const tableAliases = getTableAliases(params)
 
     let objKeys: string[] = [];
-    let dbKeys: string[] = [];
+    let dbKeys: getValuesResult[] = [];
     for (let prop of body.properties) {
         if (!isObjectProperty(prop))
             throw Error('expecting ObjectProperty')
 
-        objKeys = objKeys.concat(getKeys(null, prop))
-        dbKeys = dbKeys.concat(getValues(prop, { root: '$' }));
+        objKeys = objKeys.concat(getKeys(null, prop))        
+        dbKeys = dbKeys.concat(
+          getValues(prop, {
+            root: "$",
+            validRootObjects: getTableAliases(params)
+          })
+        );
     }
+    
     return {
-        tableAlias,
+        tableAliases,
         objKeys,
-        dbKeys
+        dbKeys: dbKeys.map(x =>({
+            jsonSelect: x.path,
+            tableAlias: x.rootObj
+        }))
     };
+}
+function getTableAliases(params: Array<Identifier | Pattern | RestElement | TSParameterProperty>){
+    return params.map(x => {
+        if(!isIdentifier(x))
+            throw new ParseError('expected param to be Identifier', x)
+        return x.name;
+    })
 }
 function getKeys(path: string | null, prop: ObjectProperty): string[] {
     const appendToPath = (name: string) => `${path != null ? `${path}.` : ''}${name}`
@@ -85,17 +103,20 @@ function getKeys(path: string | null, prop: ObjectProperty): string[] {
 }
 
 type getValuesOptions = {
-    root?: string
+    root?: string,
+    validRootObjects: string[]
 }
 
-
-
-function getValues(prop: ObjectProperty, opts: getValuesOptions): string[] {
+type getValuesResult = { 
+    path: string, 
+    rootObj: string 
+};
+function getValues(prop: ObjectProperty, opts: getValuesOptions): getValuesResult[] {
     if (isMemberExpression(prop.value)) {
         return [getValueOfMemberExpression(prop.value, opts)];
     }
     else if (isObjectExpression(prop.value)) {
-        let subValues: string[] = [];
+        let subValues: getValuesResult[] = [];
         for (let subProp of prop.value.properties) {
             if (!isObjectProperty(subProp))
                 throw new Error('expected subProp to be object property')
@@ -105,19 +126,21 @@ function getValues(prop: ObjectProperty, opts: getValuesOptions): string[] {
     }
     throw new Error('not implemented')
 }
-
-function getValueOfMemberExpression(propVal: MemberExpression, { root }: getValuesOptions): string {
+function getValueOfMemberExpression(propVal: MemberExpression, { root, validRootObjects }: getValuesOptions): getValuesResult {
 
     if (isIdentifier(propVal.object) && isIdentifier(propVal.property)) {
         root = root || propVal.object.name;
-        return `${root}.${propVal.property.name}`
+        return {
+            path: `${root}.${propVal.property.name}`,
+            rootObj: propVal.object.name
+        }        
     }
     else if (isMemberExpression(propVal.object) && isIdentifier(propVal.property)) {
-        let tmp = `${getValueOfMemberExpression(propVal.object, { root })}.${propVal.property.name}`;
-        return `${getValueOfMemberExpression(propVal.object, { root })}.${propVal.property.name}`
+        const tmp = getValueOfMemberExpression(propVal.object, { root, validRootObjects });
+        return {
+            rootObj: tmp.rootObj,
+            path: `${tmp.path}.${propVal.property.name}`
+        }         
     }
     throw new Error('expected identifier')
-
-    // else if(isMemberExpression(prop.value) && )
-    throw new Error('not implemented')
 }
