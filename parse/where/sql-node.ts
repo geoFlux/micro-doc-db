@@ -20,7 +20,8 @@ export class SqlLogicalNode implements SqlBinaryNode {
         "==":"=",
         "===":"=",
         "||":"or",
-        "&&":"and"
+        "&&":"and",
+        "!=":"!="
     }
     type = "SqlBinaryExpression";
     text = this.map[this.javascriptOp];
@@ -56,7 +57,8 @@ export class SqlBindParamNode implements SqlLeafNode {
     constructor(
         public isLiteral: boolean,
         public position: number,
-        public parenthesized = false
+        public parenthesized = false,
+        public literalValue: any = null
     ){}
 }
 
@@ -74,4 +76,8 @@ export function isSqlLeafNode(o: any): o is SqlLeafNode {
     return o.left == null
         && o.right == null
         && isSqlNode(o);
+}
+export function isSqlBindParamNode(o: any): o is SqlBindParamNode {
+    return isSqlNode(o)
+        && o.type == 'BindParamExpression'
 }

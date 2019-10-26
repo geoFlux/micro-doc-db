@@ -1,32 +1,67 @@
 import { parseExpression } from '@babel/parser'
-import { isArrowFunctionExpression, Expression, isObjectExpression, ObjectProperty, isObjectProperty, isIdentifier, SourceLocation, arrowFunctionExpression, isMemberExpression, MemberExpression, ObjectExpression, FunctionExpression, ArrowFunctionExpression, Identifier, Pattern, RestElement, TSParameterProperty, isFunctionExpression, isBlockStatement, isReturnStatement, isBinaryExpression, isLogicalExpression, BinaryExpression, LogicalExpression, isCallExpression, isLiteral } from '@babel/types'
+import { isArrowFunctionExpression, Expression, isObjectExpression, ObjectProperty, isObjectProperty, isIdentifier, SourceLocation, arrowFunctionExpression, isMemberExpression, MemberExpression, ObjectExpression, FunctionExpression, ArrowFunctionExpression, Identifier, Pattern, RestElement, TSParameterProperty, isFunctionExpression, isBlockStatement, isReturnStatement, isBinaryExpression, isLogicalExpression, BinaryExpression, LogicalExpression, isCallExpression, isLiteral, isStringLiteral, isNumericLiteral, isBooleanLiteral } from '@babel/types'
 import { WorkOrder } from '../../WorkOrder'
 import { NotImplementedError, ParseError } from '../../custom-errors';
 import { getValueOfMemberExpression } from '../common';
-import { SqlNode, SqlLogicalNode, SqlColumnNode, SqlBindParamNode, isSqlBinaryNode, isSqlLeafNode } from './sql-node';
+import { SqlNode, SqlLogicalNode, SqlColumnNode, SqlBindParamNode, isSqlBinaryNode, isSqlLeafNode, isSqlBindParamNode } from './sql-node';
 
 
 
 
 type BindFunc = <T>(param: T) => T;
 export function parseWhereFunc(func: (item: any, bind: BindFunc) => boolean) {
-    const bindParams = getBindParams(func);
+    
 
     const expr = parseExpression(func.toString());
+    const whereExpr = parseWhereExpr(expr);
+    const bindParams = getBindParams(func, whereExpr);
     //todo: adjust bindParams to take account of any literal values
     //and return the bindParams with the parsed where clause
-    return parseWhereExpr(expr)    
+    return {
+        bindParams,
+        whereExpr
+    }    
 // console.log(tmp)
 }
-function getBindParams(func: (item: any, bind: BindFunc) => boolean): any[] {
-    const bindParams: any[] = []
+
+function getBindParams(func: (item: any, bind: BindFunc) => boolean, whereExpr: SqlNode): any[] {
+    const dynamicBindParams: any[] = []
     const bind: any = (param: any) => {
-        bindParams.push(param)
+        dynamicBindParams.push(param)
         return {};
     };
     const proxy = getProxy();
+    //todo: this doesn't work cause shit gets short-circuited, causing bind to not be called
+    //todo: build a proxy object that evaluates all bind calls?
     func(proxy, bind);
+
+
+    const bindNodes = getSqlBindNodes(whereExpr);
+    const bindParams: any[] = [];
+    for(let i=0; i<bindNodes.length; i++) {
+        if(bindNodes[i].isLiteral) {
+            bindParams.push(bindNodes[i].literalValue)
+        }
+        else{
+            bindParams.push(dynamicBindParams.shift())
+        }
+    }
     return bindParams;
+}
+function getSqlBindNodes(whereExpr: SqlNode): SqlBindParamNode[] {
+    if(isSqlBindParamNode(whereExpr)){
+        return [whereExpr]
+    }
+    else if(isSqlBinaryNode(whereExpr)) {
+        return [
+            ...getSqlBindNodes(whereExpr.left),
+            ...getSqlBindNodes(whereExpr.right)
+        ]
+    }
+    else {
+        return [];
+    }
+    throw new NotImplementedError()
 }
 function parseWhereExpr(expr: Expression): SqlNode {
     if(isArrowFunctionExpression(expr))
@@ -81,13 +116,16 @@ function parseWhereExprBody(expr: Expression): SqlNode {
             )
         }
     }
-    else if(isLiteral(expr)) {
+    else if(isStringLiteral(expr) || isNumericLiteral(expr) || isBooleanLiteral(expr)) {
+        //Literal = StringLiteral | NumericLiteral | NullLiteral | BooleanLiteral | RegExpLiteral | TemplateLiteral | BigIntLiteral;
         return new SqlBindParamNode(
             true,
-            0
+            0,
+            false,
+            expr.value            
         )
     }
-    throw new NotImplementedError();
+    throw new ParseError('unsupported expression type:'+expr.type, expr)    
 }
 
 const getProxy = (): any => new Proxy({}, ({
@@ -107,8 +145,10 @@ const func2 = (item: WorkOrder, bind: <T>(param: T) => T) => item.workOrderId ==
 
 const expr1 = parseExpression(func1.toString())
 const expr2 = parseExpression(func2.toString())
-const sqlExpr = parseWhereFunc((item: WorkOrder, bind: <T>(param: T) => T) => item.workOrderId == bind(workorderId) && (item.workOrderNumber == 'blah' || item.workOrderNumber == 'blorp'))
-console.log(sqlNodeToString(sqlExpr))
+const crewId='this is the crewId'
+const sqlExpr = parseWhereFunc((item: WorkOrder, bind: <T>(param: T) => T) => item.workOrderId != bind(workorderId) && (item.workOrderNumber == bind('blah') || item.workOrderNumber == bind('blorp')) && item.crewId==bind(crewId))
+console.log(sqlExpr.bindParams);
+console.log(sqlNodeToString(sqlExpr.whereExpr))
 
 
 
