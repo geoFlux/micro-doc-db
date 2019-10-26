@@ -9,21 +9,51 @@ export interface SqlNode {
     parenthesized: boolean;
 }
 
-export interface SqlBinaryNode extends SqlNode {
+export interface SqlLeftRightNode extends SqlNode {
     left: SqlNode;
     right: SqlNode;
 }
 export interface SqlLeafNode extends SqlNode {    
 }
-export class SqlLogicalNode implements SqlBinaryNode {
-    private map: Dictionary<string> = {
-        "==":"=",
-        "===":"=",
-        "||":"or",
-        "&&":"and",
-        "!=":"!="
+export interface SqlLogicalNode extends SqlLeftRightNode {
+    javascriptOp: "||" | "&&"
+}
+export type JavascriptComparisonOperator = '==' | '===' | '!=' | '>' | '<'
+export interface SqlComparisonNode extends SqlLeftRightNode {
+    javascriptOp: JavascriptComparisonOperator
+}
+
+
+export function isSqlLogicalNode(o: any): o is SqlLogicalNode {
+    return o.javascriptOp != null
+        && (o.javascriptOp == '||' || o.javascriptOp == '&&')
+        && isSqlLeftRightNode(o)                
+}
+export function isSqlLogicalOrComparisonNode(o: any): o is SqlLogicalOrComparisonNode{
+    return isSqlNode(o)
+        && o.type == 'SqlLogicalOrComparisonNode'
+}
+export function isSqlComparisonNode(o: any): o is SqlComparisonNode {
+    return isSqlLogicalOrComparisonNode(o)
+        && (
+            o.javascriptOp == '=='
+            || o.javascriptOp == '==='
+            || o.javascriptOp == '!='
+            || o.javascriptOp == '>'
+            || o.javascriptOp == '<'
+        )
+}
+export class SqlLogicalOrComparisonNode implements SqlLeftRightNode {
+     private get map(): Dictionary<string> {
+        return {
+            "==":"=",
+            "===":"=",
+            "||":"or",
+            "&&":"and",
+            "!=":"!="
+        }
     }
-    type = "SqlBinaryExpression";
+    type = "SqlLogicalOrComparisonNode";
     text = this.map[this.javascriptOp];
 
     
@@ -34,7 +64,7 @@ export class SqlLogicalNode implements SqlBinaryNode {
         public parenthesized = false
     ) {
         if(this.map[javascriptOp] == null)
-            throw new Error(`SqlLogicalNode - javascriptOp: ${javascriptOp} is invalid, must be one of ${this.validJavascriptOps.join(' ')}`)
+            throw new Error(`SqlLogicalOrComparisonNode - javascriptOp: ${javascriptOp} is invalid, must be one of ${this.validJavascriptOps.join(' ')}`)
     }
 
     public get validJavascriptOps() {
@@ -67,11 +97,12 @@ export function isSqlNode(obj: any): obj is SqlNode {
         && obj.text != null
         && obj.parenthesized != null
 }
-export function isSqlBinaryNode(o: any): o is SqlBinaryNode {
+export function isSqlLeftRightNode(o: any): o is SqlLeftRightNode {
     return o.left != null
         && o.right != null
         && isSqlNode(o)        
 }
+
 export function isSqlLeafNode(o: any): o is SqlLeafNode {
     return o.left == null
         && o.right == null
@@ -80,4 +111,8 @@ export function isSqlLeafNode(o: any): o is SqlLeafNode {
 export function isSqlBindParamNode(o: any): o is SqlBindParamNode {
     return isSqlNode(o)
         && o.type == 'BindParamExpression'
+}
+export function isSqlColumnNode(o: any): o is SqlColumnNode {
+    return isSqlNode(o)
+        && o.type == 'SqlColumnExpression'
 }
