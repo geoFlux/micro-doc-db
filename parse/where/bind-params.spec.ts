@@ -29,6 +29,6 @@ const test2 = () => {
     assert(bindParams[2] === requiredClearance, `expected ${bindParams[2]} to be ${requiredClearance}`)
     assert(bindParams[3] === workOrderNumber, `expected ${bindParams[3]} to be ${workOrderNumber}`)
 }
-// test1();
+test1();
 test2();
 console.log('tests ok')

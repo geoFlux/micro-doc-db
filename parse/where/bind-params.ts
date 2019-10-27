@@ -12,7 +12,8 @@ interface BindProxyInfo{
     path: string, 
     comparisonOperator: JavascriptComparisonOperator, 
     shouldBeEqual: boolean, 
-    value: any
+    value: any,
+    isLiteralValue: boolean
 }
 
 //todo: passed in expression must not contain any literal nulls?
@@ -20,21 +21,16 @@ export function getBindParams<T>(func: (item: T, bind: BindFunc) => boolean, whe
     whereExpr = whereExpr || parseWhereExpr(parseExpression(func.toString()))
 
     const proxyInfo = getBindProxyInfo(whereExpr);
-    //shouldn't take more than proxyInfo.length iterations
-    let iterationCount = 0;
-    do{
-        if(iterationCount > proxyInfo.length) break;
-        let paramNo = 0;
-        const bindP: any = (param: any) => {
-            proxyInfo[paramNo].value = param;
-            paramNo++;
-            return param;
-        }
-        const proxy = getProxy(proxyInfo);        
-        func(proxy, bindP);
-        iterationCount++;
-    }while(proxyInfo.some(x => x.value == null))
-    
+            
+    let paramNo = 0;
+    const bindP: any = (param: any) => {
+        proxyInfo[paramNo].value = param;
+        paramNo++;
+        return 1;
+    }
+    const proxy = getProxy(proxyInfo);        
+    func(proxy, bindP);
+                
     return proxyInfo.map(x => x.value);
 }
 
@@ -70,35 +66,37 @@ function proxyProperty(info: BindProxyInfo[], path: string) {
                 throw new Error(`proxy: ${path}, called ${numTimesCalled} times, expected:${myInfos.length}`)                
             }
             const myInfo = myInfos[numTimesCalled-1];
-            const isNull = myInfo.value == null;
-            const type = typeof(myInfo.value)
-            const val = myInfo.value
+            const val = myInfo.isLiteralValue ? myInfo.value : 1;//BindP should always return 1
+            const isNull = val == null;
+            const type = typeof(val)
+
+            
             if(myInfo.shouldBeEqual){
                 switch(myInfo.comparisonOperator) {
                     case '!=':
-                        if(myInfo.value == null) return 'notnull'
+                        if(val == null) return 'notnull'
                         if(type == 'boolean') return !val
                         if(type == 'number') return val - 1
                         if(type == 'string') return val+'notEqual'
                         throw new NotImplementedError()
                         break;
                     case '<':
-                        if(myInfo.value == null) return 'notnull'
+                        if(val == null) return 'notnull'
                         if(type == 'boolean') return -1
                         if(type == 'number') return val - 1
                         if(type == 'string') return getStringLessThan(val)
                         throw new NotImplementedError()
                         break;
                     case '>':
-                        if(myInfo.value == null) return 'notnull'
+                        if(val == null) return 'notnull'
                         if(type == 'boolean') return -1
-                        if(type == 'number') return val - 1
+                        if(type == 'number') return val + 1
                         if(type == 'string') return val+'notEqual'
                         throw new NotImplementedError()
                         break;
                     case '==':
                     case '===':
-                        if(myInfo.value == null) return null
+                        if(val == null) return null
                         if(type == 'boolean') return val
                         if(type == 'number') return val
                         if(type == 'string') return val
@@ -110,21 +108,21 @@ function proxyProperty(info: BindProxyInfo[], path: string) {
             else {//should be false
                 switch(myInfo.comparisonOperator) {
                     case '!=':
-                        if(myInfo.value == null) return null
+                        if(val == null) return null
                         if(type == 'boolean') return val
                         if(type == 'number') return val
                         if(type == 'string') return val
                         throw new NotImplementedError()
                         break;
                     case '<':
-                        if(myInfo.value == null) return 'notnull'
+                        if(val == null) return 'notnull'
                         if(type == 'boolean') return -1
-                        if(type == 'number') return val - 1
+                        if(type == 'number') return val + 1
                         if(type == 'string') return val+'notEqual'
                     throw new NotImplementedError()
                         break;
                     case '>':
-                        if(myInfo.value == null) return 'notnull'
+                        if(val == null) return 'notnull'
                         if(type == 'boolean') return -1
                         if(type == 'number') return val - 1
                         if(type == 'string') return getStringLessThan(val)                        
@@ -132,7 +130,7 @@ function proxyProperty(info: BindProxyInfo[], path: string) {
                         break;
                     case '==':
                     case '===':
-                        if(myInfo.value == null) return 'notnull'
+                        if(val == null) return 'notnull'
                         if(type == 'boolean') return !val
                         if(type == 'number') return val - 1
                         if(type == 'string') return val+'notEqual'
@@ -179,7 +177,7 @@ function getBindProxyInfo(expr: SqlNode): BindProxyInfo[] {
         else if(isSqlColumnNode(node)){
             paths.push(node.path);
         }
-        else if(isSqlBindParamNode(node)){
+        else if(isSqlBindParamNode(node)){            
             const path = paths.pop();
             if(path == null)
                 throw new Error('expected path to be defined')
@@ -193,15 +191,15 @@ function getBindProxyInfo(expr: SqlNode): BindProxyInfo[] {
             
             const value = node.isLiteral ? node.literalValue: null;
             if(leftOp == null){
-                info.push({position: position++,comparisonOperator, path, shouldBeEqual: true, value})
+                info.push({position: position++,comparisonOperator, path, shouldBeEqual: true, value, isLiteralValue: node.isLiteral})
             }
             //if we're to the left of an && operator, we want to always return true            
             else if(leftOp.op == '&&') {
-                info.push({position: position++,comparisonOperator, path, shouldBeEqual: true, value})
+                info.push({position: position++,comparisonOperator, path, shouldBeEqual: true, value, isLiteralValue: node.isLiteral})
             }            
             //if we're to the left of an || operator, we want to always return false             
             else if(leftOp.op == '||'){
-                info.push({position: position++,comparisonOperator, path, shouldBeEqual: false, value})
+                info.push({position: position++,comparisonOperator, path, shouldBeEqual: false, value, isLiteralValue: node.isLiteral})
             }            
         }
         else {
