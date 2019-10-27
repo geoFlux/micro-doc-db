@@ -162,19 +162,19 @@ function getBindProxyInfo(expr: SqlNode): BindProxyInfo[] {
     const walkTree = (node: SqlNode, ops: operator[] ) =>{
         if(isSqlLogicalNode(node)) {
             ops.push({op: node.javascriptOp, source: 'left'})
-            walkTree(node.left, ops)
+            walkTree(node.left, [...ops])
             ops.pop()
             ops.push({op: node.javascriptOp, source: 'right'})
-            walkTree(node.right, ops)
+            walkTree(node.right, [...ops])
         }
         else if(isSqlComparisonNode(node)) {
             comparisonOperators.push(node.javascriptOp)
-            walkTree(node.left, ops);
-            walkTree(node.right, ops);
+            walkTree(node.left, [...ops]);
+            walkTree(node.right, [...ops]);
         }
         else if(isSqlLeftRightNode(node)) {
-            walkTree(node.left, ops)
-            walkTree(node.right, ops)
+            walkTree(node.left, [...ops])
+            walkTree(node.right, [...ops])
         }
         else if(isSqlColumnNode(node)){
             paths.push(node.path);
@@ -197,8 +197,8 @@ function getBindProxyInfo(expr: SqlNode): BindProxyInfo[] {
             //if we're to the left of an && operator, we want to always return true            
             else if(myOp.op == '&&') {
                 info.push({position: position++,comparisonOperator, path, shouldBeEqual: true, value})
-            }
-            //if we're to the left of an && operator, we want to always return true 
+            }            
+            //if we're to the left of an || operator, we want to always return false             
             else if(myOp.op == '||'){
                 info.push({position: position++,comparisonOperator, path, shouldBeEqual: false, value})
             }            
