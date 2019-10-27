@@ -20,7 +20,9 @@ export function parseWhereExpr(expr: Expression): SqlNode {
 }
 
 function parseWhereExprArrowFunc(expr: ArrowFunctionExpression): SqlNode {
-    const returnExpr = expr.body;
+    let returnExpr: any = expr.body;
+    if(isBlockStatement(expr.body) && isReturnStatement(expr.body.body[0]) )
+        returnExpr = expr.body.body[0].argument
     if (!isBinaryExpression(returnExpr) && !isLogicalExpression(returnExpr))
         throw new ParseError("expected return statement to be binary or logical expression", returnExpr);
     return parseWhereExprBody(returnExpr);    

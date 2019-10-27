@@ -29,6 +29,20 @@ const test2 = () => {
     assert(bindParams[2] === requiredClearance, `expected ${bindParams[2]} to be ${requiredClearance}`)
     assert(bindParams[3] === workOrderNumber, `expected ${bindParams[3]} to be ${workOrderNumber}`)
 }
-test1();
-test2();
+
+const test3 = () =>{
+    
+    const workorderId1 =1234;
+    const workorderId2 = 4321
+    const bindParams = getBindParams((item: WorkOrder, bind: <T>(param: T) => T) => {
+        return item.workOrderId == bind(workorderId1) 
+            || item.workOrderId == bind(workorderId2)
+    })
+    assert(bindParams[0] === workorderId1, `expected ${bindParams[0]} to be ${workorderId1}`)
+    assert(bindParams[1] === workorderId2, `expected ${bindParams[1]} to be ${workorderId2}`)
+}
+
+// test1();
+// test2();
+test3();
 console.log('tests ok')

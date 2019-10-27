@@ -52,16 +52,18 @@ const getProxy = (proxyInfo: BindProxyInfo[]): any => {
     for(let info of proxyInfo) {
         const obj = getObj(info.path);
         const propName = getPropName(info.path);
-        Object.defineProperty(obj, propName, proxyProperty(proxyInfo, info.path));
+        if(obj[propName] == null)
+            Object.defineProperty(obj, propName, proxyProperty(proxyInfo, info.path));
     }
     return ret;
 }
 function proxyProperty(info: BindProxyInfo[], path: string) {
     const myInfos = info.filter(x => x.path == path);
-    let numTimesCalled = 0;
+    let numTimesCalled = 1;
     const proxy ={
         get: () => {
-            numTimesCalled++;
+            console.log('proxyProperty', path)
+            // numTimesCalled++;
             if(numTimesCalled > myInfos.length){
                 throw new Error(`proxy: ${path}, called ${numTimesCalled} times, expected:${myInfos.length}`)                
             }
