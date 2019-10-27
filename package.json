@@ -4,16 +4,20 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "mocha",
     "start": "ts-node index.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "compile": "tsc --declaration"    
   },
   "author": "Jason Blake",
   "license": "mit",
   "devDependencies": {
     "@babel/types": "^7.6.3",
     "@types/lodash": "^4.14.144",
+    "@types/mocha": "^5.2.7",
     "@types/sqlite3": "^3.1.5",
+    "assert": "^2.0.0",
+    "mocha": "^6.2.2",
     "ts-node": "^8.4.1",
     "typescript": "^3.6.4"
   },
