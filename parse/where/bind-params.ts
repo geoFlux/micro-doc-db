@@ -186,20 +186,21 @@ function getBindProxyInfo(expr: SqlNode): BindProxyInfo[] {
             const comparisonOperator = comparisonOperators.pop();
             if(comparisonOperator == null)
                 throw new Error('expected comparison operator to be defined')
-            let myOp = ops.pop();
-            while(myOp != null && myOp.source != 'left')
-                myOp = ops.pop();
+
+            let leftOp = ops.pop();
+            while(leftOp != null && leftOp.source != 'left')
+                leftOp = ops.pop();
             
             const value = node.isLiteral ? node.literalValue: null;
-            if(myOp == null){
+            if(leftOp == null){
                 info.push({position: position++,comparisonOperator, path, shouldBeEqual: true, value})
             }
             //if we're to the left of an && operator, we want to always return true            
-            else if(myOp.op == '&&') {
+            else if(leftOp.op == '&&') {
                 info.push({position: position++,comparisonOperator, path, shouldBeEqual: true, value})
             }            
             //if we're to the left of an || operator, we want to always return false             
-            else if(myOp.op == '||'){
+            else if(leftOp.op == '||'){
                 info.push({position: position++,comparisonOperator, path, shouldBeEqual: false, value})
             }            
         }
