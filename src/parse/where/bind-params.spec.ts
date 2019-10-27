@@ -1,6 +1,6 @@
 import { getBindParams } from "./bind-params";
 import { WorkOrder } from "../../WorkOrder";
-import { equal } from "assert";
+import { equal,throws } from "assert";
 
 
 describe("getBindParams", () => {
@@ -58,6 +58,11 @@ describe("getBindParams", () => {
         equal(bindParams[3], workorderId4, `expected ${bindParams[3]} to be ${workorderId4}`)
 
     });
-
+    it(`Should not allow literal values`,() => {        
+        throws(() => {
+            const workorderId =1234;        
+            getBindParams((item: WorkOrder, bind: <T>(param: T) => T) => item.workOrderId == bind(workorderId) && item.crewId == '1234')
+        })                
+    })
     
 });

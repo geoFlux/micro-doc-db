@@ -21,7 +21,8 @@ export function getBindParams<T>(func: (item: T, bind: BindFunc) => boolean, whe
     whereExpr = whereExpr || parseWhereExpr(parseExpression(func.toString()))
 
     const proxyInfo = getBindProxyInfo(whereExpr);
-            
+    if(proxyInfo.some(x => x.isLiteralValue))
+        throw Error('Literal values are not supported, please use the bind function')
     let paramNo = 0;
     const bindP: any = (param: any) => {
         proxyInfo[paramNo].value = param;
