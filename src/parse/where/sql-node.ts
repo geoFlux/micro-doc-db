@@ -50,7 +50,9 @@ export class SqlLogicalOrComparisonNode implements SqlLeftRightNode {
             "===":"=",
             "||":"or",
             "&&":"and",
-            "!=":"!="
+            "!=":"!=",
+            ">":">",
+            "<":"<"
         }
     }
     type = "SqlLogicalOrComparisonNode";

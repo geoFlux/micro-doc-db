@@ -59,15 +59,9 @@ const getProxy = (proxyInfo: BindProxyInfo[]): any => {
 }
 function proxyProperty(info: BindProxyInfo[], path: string) {
     const myInfos = info.filter(x => x.path == path);
-    let numTimesCalled = 1;
     const proxy ={
         get: () => {
-            console.log('proxyProperty', path)
-            // numTimesCalled++;
-            if(numTimesCalled > myInfos.length){
-                throw new Error(`proxy: ${path}, called ${numTimesCalled} times, expected:${myInfos.length}`)                
-            }
-            const myInfo = myInfos[numTimesCalled-1];
+            const myInfo = myInfos.find(x => x.value == null) || myInfos[myInfos.length-1];
             const val = myInfo.isLiteralValue ? myInfo.value : 1;//BindP should always return 1
             const isNull = val == null;
             const type = typeof(val)
