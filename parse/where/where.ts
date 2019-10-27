@@ -1,10 +1,9 @@
-import { parseExpression } from '@babel/parser'
 import { isArrowFunctionExpression, Expression, isObjectExpression, ObjectProperty, isObjectProperty, isIdentifier, SourceLocation, arrowFunctionExpression, isMemberExpression, MemberExpression, ObjectExpression, FunctionExpression, ArrowFunctionExpression, Identifier, Pattern, RestElement, TSParameterProperty, isFunctionExpression, isBlockStatement, isReturnStatement, isBinaryExpression, isLogicalExpression, BinaryExpression, LogicalExpression, isCallExpression, isLiteral, isStringLiteral, isNumericLiteral, isBooleanLiteral } from '@babel/types'
 import { WorkOrder } from '../../WorkOrder'
 import { NotImplementedError, ParseError } from '../../custom-errors';
 import { getValueOfMemberExpression } from '../common';
 import { SqlNode, SqlLogicalOrComparisonNode, SqlColumnNode, SqlBindParamNode, isSqlLeftRightNode, isSqlLeafNode, isSqlBindParamNode } from './sql-node';
-import { BindFunc, getBindParams } from './bind-params';
+import { parseWhereFunc } from './where-bind';
 
 
 function bindP<T>(val: T) {
@@ -12,24 +11,7 @@ function bindP<T>(val: T) {
 }
 
 
-export function parseWhereFunc(func: (item: any, bind: BindFunc) => boolean) {
-    
-    const expr = parseExpression(func.toString());
-    const whereExpr = parseWhereExpr(expr);
-    console.log(JSON.stringify(whereExpr,null,'    '))
-    const bindParams = getBindParams(func, whereExpr);
-    //todo: adjust bndParams to take account of any literal values
-    //and return the bindParams with the parsed where clause
-    return {
-        bindParams,
-        whereExpr
-    }    
-// console.log(tmp)
-}
-
-
-
-function parseWhereExpr(expr: Expression): SqlNode {
+export function parseWhereExpr(expr: Expression): SqlNode {
     if(isArrowFunctionExpression(expr))
         return parseWhereExprArrowFunc(expr)
     if(isFunctionExpression(expr))
@@ -96,22 +78,8 @@ function parseWhereExprBody(expr: Expression): SqlNode {
 
 
 
-//parseWhereFunc((item: WorkOrder, bind: <T>(param: T) => T) => item.workOrderId == 12345)
-
-const workorderId = 54321;
-
-const bind = (param: any) => {
-    return param;
-};
-const func1 = (item: WorkOrder, bind: <T>(param: T) => T) => item.workOrderId == bind(workorderId);
-const func2 = (item: WorkOrder, bind: <T>(param: T) => T) => item.workOrderId == bind(workorderId)&& item.workOrderNumber == 'blah';
 
 
-const crewId='this is the crewId'
-// const sqlExpr = parseWhereFunc((item: WorkOrder, bind: <T>(param: T) => T) => item.workOrderId != bind(workorderId) && (item.workOrderNumber == bind('blah') || item.workOrderNumber == bind('blorp')) && item.crewId==bind(crewId))
-const sqlExpr = parseWhereFunc((item: WorkOrder, bind: <T>(param: T) => T) => item.workOrderId == bind(workorderId) && item.crewId == bind(crewId))
-console.log(sqlExpr.bindParams);
-console.log(sqlNodeToString(sqlExpr.whereExpr))
 
 
 

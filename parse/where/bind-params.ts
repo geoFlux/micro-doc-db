@@ -5,19 +5,25 @@ import { AssertionError } from "assert";
 import { WorkOrder } from "../../WorkOrder";
 export type BindFunc = <T>(param: T) => T;
 import { set, get } from 'lodash';
+import { parseWhereExpr } from './where';
+import { parseExpression } from '@babel/parser';
+interface BindProxyInfo{    
+    position: number
+    path: string, 
+    comparisonOperator: JavascriptComparisonOperator, 
+    shouldBeEqual: boolean, 
+    value: any
+}
 
 //todo: passed in expression must not contain any literal nulls?
-export function getBindParams(func: (item: any, bind: BindFunc) => boolean, whereExpr: SqlNode): any[] {
-    // const dynamicBindParams: any[] = []
-    
-    // const bind: any = (param: any) => {
-    //     dynamicBindParams.push(param)
-    //     return {};
-    // };    
+export function getBindParams<T>(func: (item: T, bind: BindFunc) => boolean, whereExpr?: SqlNode): any[] {
+    whereExpr = whereExpr || parseWhereExpr(parseExpression(func.toString()))
 
     const proxyInfo = getBindProxyInfo(whereExpr);
-    
+    //shouldn't take more than proxyInfo.length iterations
+    let iterationCount = 0;
     do{
+        if(iterationCount > proxyInfo.length) break;
         let paramNo = 0;
         const bindP: any = (param: any) => {
             proxyInfo[paramNo].value = param;
@@ -26,26 +32,10 @@ export function getBindParams(func: (item: any, bind: BindFunc) => boolean, wher
         }
         const proxy = getProxy(proxyInfo);        
         func(proxy, bindP);
+        iterationCount++;
     }while(proxyInfo.some(x => x.value == null))
     
     return proxyInfo.map(x => x.value);
-
-    //todo: this doesn't work cause shit gets short-circuited, causing bind to not be called
-    //todo: build a proxy object that evaluates all bind calls?
-    
-
-
-    // const bindNodes = getSqlBindNodes(whereExpr);
-    // const bindParams: any[] = [];
-    // for(let i=0; i<bindNodes.length; i++) {
-    //     if(bindNodes[i].isLiteral) {
-    //         bindParams.push(bindNodes[i].literalValue)
-    //     }
-    //     else{
-    //         bindParams.push(dynamicBindParams.shift())
-    //     }
-    // }
-    // return bindParams;
 }
 
 const getProxy = (proxyInfo: BindProxyInfo[]): any => {
@@ -67,9 +57,6 @@ const getProxy = (proxyInfo: BindProxyInfo[]): any => {
         const obj = getObj(info.path);
         const propName = getPropName(info.path);
         Object.defineProperty(obj, propName, proxyProperty(proxyInfo, info.path));
-        // if(get(ret, info.path, null) == null) {
-        //     set(ret, info.path, getBindProxy( proxyInfo, info.path))
-        // }
     }
     return ret;
 }
@@ -158,104 +145,14 @@ function proxyProperty(info: BindProxyInfo[], path: string) {
     }
     return proxy;
 }
-function getBindProxy(info: BindProxyInfo[], path: string) {
-    const myInfos = info.filter(x => x.path == path);
-    let numTimesCalled = 0;
-    const proxy = (): any => new Proxy({},({
-        get: () => {
-            numTimesCalled++;
-            if(numTimesCalled > myInfos.length){
-                throw new Error(`proxy: ${path}, called ${numTimesCalled} times, expected:${myInfos.length}`)                
-            }
-            const myInfo = myInfos[numTimesCalled-1];
-            const isNull = myInfo.value == null;
-            const type = typeof(myInfo.value)
-            const val = myInfo.value
-            if(myInfo.shouldBeEqual){
-                switch(myInfo.comparisonOperator) {
-                    case '!=':
-                        if(myInfo.value == null) return 'notnull'
-                        if(type == 'boolean') return !val
-                        if(type == 'number') return val - 1
-                        if(type == 'string') return val+'notEqual'
-                        throw new NotImplementedError()
-                        break;
-                    case '<':
-                        if(myInfo.value == null) return 'notnull'
-                        if(type == 'boolean') return -1
-                        if(type == 'number') return val - 1
-                        if(type == 'string') return getStringLessThan(val)
-                        throw new NotImplementedError()
-                        break;
-                    case '>':
-                        if(myInfo.value == null) return 'notnull'
-                        if(type == 'boolean') return -1
-                        if(type == 'number') return val - 1
-                        if(type == 'string') return val+'notEqual'
-                        throw new NotImplementedError()
-                        break;
-                    case '==':
-                    case '===':
-                        if(myInfo.value == null) return null
-                        if(type == 'boolean') return val
-                        if(type == 'number') return val
-                        if(type == 'string') return val
-                        throw new NotImplementedError()
-                    default:
-                        throw new NotImplementedError()
-                }
-            }
-            else {//should be false
-                switch(myInfo.comparisonOperator) {
-                    case '!=':
-                        if(myInfo.value == null) return null
-                        if(type == 'boolean') return val
-                        if(type == 'number') return val
-                        if(type == 'string') return val
-                        throw new NotImplementedError()
-                        break;
-                    case '<':
-                        if(myInfo.value == null) return 'notnull'
-                        if(type == 'boolean') return -1
-                        if(type == 'number') return val - 1
-                        if(type == 'string') return val+'notEqual'
-                    throw new NotImplementedError()
-                        break;
-                    case '>':
-                        if(myInfo.value == null) return 'notnull'
-                        if(type == 'boolean') return -1
-                        if(type == 'number') return val - 1
-                        if(type == 'string') return getStringLessThan(val)                        
-                        throw new NotImplementedError()
-                        break;
-                    case '==':
-                    case '===':
-                        if(myInfo.value == null) return 'notnull'
-                        if(type == 'boolean') return !val
-                        if(type == 'number') return val - 1
-                        if(type == 'string') return val+'notEqual'
-                        throw new NotImplementedError()
-                    default:
-                        throw new NotImplementedError()
-                }
-            }
-        }
-    }))
-    return proxy();
-}
+
 const getStringLessThan = (val: string): string | number =>  {
     if(val == '') return -1
     return val.substr(0, val.length - 1)
 }
 
 
-interface BindProxyInfo{    
-    position: number
-    path: string, 
-    comparisonOperator: JavascriptComparisonOperator, 
-    shouldBeEqual: boolean, 
-    value: any
-}
+
 function getBindProxyInfo(expr: SqlNode): BindProxyInfo[] {
     const info: BindProxyInfo[] = [];
     type operator = {op: '&&' | '||', source: 'left'|'right'}
@@ -328,64 +225,4 @@ export function getSqlBindNodes(whereExpr: SqlNode): SqlBindParamNode[] {
     }
     throw new NotImplementedError()
 }
-function assert(assertion: boolean, msg: string) {
-    if(!assertion)
-        throw Error(msg)
-}
-const test1 = () =>{
-    const expr = {
-        "javascriptOp": "&&",
-        "left": {
-            "javascriptOp": "==",
-            "left": {
-                "tableAlias": "item",
-                "path": "workOrderId",
-                "parenthesized": false,
-                "type": "SqlColumnExpression",
-                "text": "json_extract(val, '$.workOrderId')"
-            },
-            "right": {
-                "isLiteral": false,
-                "position": 0,
-                "parenthesized": false,
-                "literalValue": null,
-                "type": "BindParamExpression",
-                "text": "?"
-            },
-            "parenthesized": false,
-            "type": "SqlLogicalOrComparisonNode",
-            "text": "="
-        },
-        "right": {
-            "javascriptOp": "==",
-            "left": {
-                "tableAlias": "item",
-                "path": "crewId",
-                "parenthesized": false,
-                "type": "SqlColumnExpression",
-                "text": "json_extract(val, '$.crewId')"
-            },
-            "right": {
-                "isLiteral": false,
-                "position": 0,
-                "parenthesized": false,
-                "literalValue": null,
-                "type": "BindParamExpression",
-                "text": "?"
-            },
-            "parenthesized": false,
-            "type": "SqlLogicalOrComparisonNode",
-            "text": "="
-        },
-        "parenthesized": false,
-        "type": "SqlLogicalOrComparisonNode",
-        "text": "and"
-    }
-    const workorderId =1234;
-    const crewId = 'crewIdValue'
-    const bindParams = getBindParams((item: WorkOrder, bind: <T>(param: T) => T) => item.workOrderId == bind(workorderId) && item.crewId == bind(crewId), expr)
-    assert(bindParams[0] === workorderId, `expected ${bindParams[0]} to be ${workorderId}`)
-    assert(bindParams[1] === crewId, `expected ${bindParams[1]} to be ${crewId}`)
-}
 
-test1();
