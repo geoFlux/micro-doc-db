@@ -2,6 +2,9 @@ import { parseSelectFunc, SelectParseResult } from "./parse/select";
 import { Database } from './async-sqlite3'
 import * as _ from 'lodash'
 import { WorkOrder } from "./WorkOrder";
+import { parseWhereFunc, BindFunc } from './parse/where'
+import { sqlNodeToWhereClause } from "./parse/where/sql-node";
+import { NotImplementedError } from "./custom-errors";
 interface blah {
     id: number;
     name: string;
@@ -47,27 +50,19 @@ const main = async () => {
     // console.log(result);
 
     const workorders = createMicroDoc<WorkOrder>(db, 'WorkOrder');
-    console.time('select')
-    // const woList = await workorders.selectAll(item => ({
-    //     workOrderId: item.workOrderId,
-    //     wonum: item.workOrderNumber,
-    //     location: {
-    //         description: item.location.description,
-    //         areaDetailDesc: item.location.areaDetails.description
-    //     }
-    // }))
-
-    // const woList = await workorders.selectWhere(item => ({
-    //     workOrderId: item.workOrderId,
-    //     wonum: item.workOrderNumber,
-    //     location: {
-    //         description: item.location.description,
-    //         areaDetailDesc: item.location.areaDetails.description
-    //     }
-    // }),
-    //     "json_extract(val, '$.workOrderNumber') = ?","118163957"
-    // )
-    const woList = await workorders
+let woList: any = null;
+    console.time('select new')
+    // const woList = await workorders
+    //     .where((item,bind) => item.workOrderNumber == bind("118163957") || item.workOrderNumber == bind("118163998") )
+    //     .select(item => ({
+    //         workOrderId: item.workOrderId,
+    //         wonum: item.workOrderNumber,
+    //         location: {
+    //             description: item.location.description,
+    //             areaDetailDesc: item.location.areaDetails.description
+    //         }
+    //     }))
+    woList = await workorders
         .select(item => ({
             workOrderId: item.workOrderId,
             wonum: item.workOrderNumber,
@@ -76,9 +71,10 @@ const main = async () => {
                 areaDetailDesc: item.location.areaDetails.description
             }
         }))
-        .where("json_extract(val, '$.workOrderNumber') = ?", "118163957")
+        .all()
 
-    console.timeEnd('select')
+    console.timeEnd('select new')
+
     console.log(woList);
 }
 type Record<T> = T & {
@@ -86,10 +82,18 @@ type Record<T> = T & {
 }
 function createMicroDoc<T>(db: Database, tableName: string) {
     return {
-
+        where: (filterFunc: (item: T, bind: BindFunc ) => boolean) => ({
+            select: <T2>(selector: (item: T) => T2) => {
+                return selectWhere(db, tableName, selector, filterFunc)
+            }
+        }),
+        all: (): Promise<Record<T>[]> => {
+            throw new NotImplementedError();
+        },
         select: <T2>(selector: (item: T) => T2) => ({
-            where: (where: string, ...params: any[]): Promise<Record<T>[]> => {
-                return selectWhere(db, tableName, selector, where, ...params)
+
+            where: (filterFunc: (item: T, bind: BindFunc ) => boolean) => {
+                return selectWhere(db, tableName, selector, filterFunc)
             },
             all: (): Promise<Record<T>[]> => {
                 return selectAll(db, tableName, selector)
@@ -104,15 +108,15 @@ async function  selectAll<T>(db: Database, tableName: string, selector: (item: T
     let result = await db.all<{extracted_cols: string}>(sqlString);
     return mapDbResults(result, parseResult);
 }
-async function  selectWhere<T>(db: Database, tableName: string, selector: (item: T) => any, where: string, ...params: any[]): Promise<any[]> {
-
+async function  selectWhere<T>(db: Database, tableName: string, selector: (item: T) => any, filterFunc: (item: T, bind: BindFunc ) => boolean): Promise<any[]> {
+    const {bindParams, whereExpr} = parseWhereFunc(filterFunc);
+    const whereStr = sqlNodeToWhereClause(whereExpr);
     const parseResult = parseSelectFunc(selector);
-    const sqlString = buildSelect(tableName, parseResult, where);
+    const sqlString = buildSelect(tableName, parseResult, whereStr);
 
-    let result = await db.all<{extracted_cols: string}>(sqlString,...params);
+    let result = await db.all<{extracted_cols: string}>(sqlString,...bindParams);
     return mapDbResults(result, parseResult);
 }
-
 function mapDbResults(result: any[], parseResult: SelectParseResult) {
     return result.map(x => ({
             rowid: x['_rowid_'],

@@ -13,7 +13,7 @@ export interface SqlLeftRightNode extends SqlNode {
     left: SqlNode;
     right: SqlNode;
 }
-export interface SqlLeafNode extends SqlNode {    
+export interface SqlLeafNode extends SqlNode {
 }
 export interface SqlLogicalNode extends SqlLeftRightNode {
     javascriptOp: "||" | "&&"
@@ -27,7 +27,7 @@ export interface SqlComparisonNode extends SqlLeftRightNode {
 export function isSqlLogicalNode(o: any): o is SqlLogicalNode {
     return o.javascriptOp != null
         && (o.javascriptOp == '||' || o.javascriptOp == '&&')
-        && isSqlLeftRightNode(o)                
+        && isSqlLeftRightNode(o)
 }
 export function isSqlLogicalOrComparisonNode(o: any): o is SqlLogicalOrComparisonNode{
     return isSqlNode(o)
@@ -58,7 +58,7 @@ export class SqlLogicalOrComparisonNode implements SqlLeftRightNode {
     type = "SqlLogicalOrComparisonNode";
     text = this.map[this.javascriptOp];
 
-    
+
     constructor(
         public javascriptOp: string,
         public left: SqlNode,
@@ -72,7 +72,7 @@ export class SqlLogicalOrComparisonNode implements SqlLeftRightNode {
     public get validJavascriptOps() {
         return Object.keys(this.map);
     }
-    
+
 }
 export class SqlColumnNode implements SqlLeafNode {
     type = 'SqlColumnExpression'
@@ -102,7 +102,7 @@ export function isSqlNode(obj: any): obj is SqlNode {
 export function isSqlLeftRightNode(o: any): o is SqlLeftRightNode {
     return o.left != null
         && o.right != null
-        && isSqlNode(o)        
+        && isSqlNode(o)
 }
 
 export function isSqlLeafNode(o: any): o is SqlLeafNode {
@@ -117,4 +117,21 @@ export function isSqlBindParamNode(o: any): o is SqlBindParamNode {
 export function isSqlColumnNode(o: any): o is SqlColumnNode {
     return isSqlNode(o)
         && o.type == 'SqlColumnExpression'
+}
+
+export function sqlNodeToWhereClause(node: SqlNode | null): string {
+
+    if(node == null)
+        return '';
+    if(isSqlLeftRightNode(node)) {
+        const leftPren = node.left.parenthesized ? ['(',')']: ['','']
+        const rightPren = node.right && node.right.parenthesized ? ['(',')']: ['', '']
+        return `${leftPren[0]}${sqlNodeToWhereClause(node.left)}${leftPren[1]} ${node.text} ${rightPren[0]}${sqlNodeToWhereClause(node.right)}${rightPren[1]}`
+    }
+    else if(isSqlLeafNode(node)){
+        return node.text
+    }
+    else {
+        throw new Error('unsupported SqlNode type:'+ JSON.stringify(node,null,'  '))
+    }
 }

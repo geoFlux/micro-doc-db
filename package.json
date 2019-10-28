@@ -5,9 +5,9 @@
   "main": "index.js",
   "scripts": {
     "test": "mocha",
-    "start": "ts-node index.ts",
+    "start": "ts-node src/index.ts",
     "build": "tsc",
-    "compile": "tsc --declaration"    
+    "compile": "tsc --declaration"
   },
   "author": "Jason Blake",
   "license": "mit",
