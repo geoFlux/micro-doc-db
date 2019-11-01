@@ -7,6 +7,7 @@ import { getValueOfMemberExpression, getValuesResult, getValuesOptions } from '.
 //TODO: modify parseSelectFunc so it can accept multiple potential tables
 
 export interface SelectParseResult {
+    isAllColumns: boolean,
     tableAliases: string[],
     objKeys: string[],
     dbKeys: {
@@ -14,8 +15,15 @@ export interface SelectParseResult {
         tableAlias: string
     }[]
 }
-export function parseSelectFunc(func: Function): SelectParseResult {
-    const tmp = func.toString();
+export function parseSelectFunc(func?: Function): SelectParseResult {
+    if(func == null) {
+        return {
+            isAllColumns: true,
+            tableAliases: [Math.random().toString().substr(2,10)],//todo: something better than this
+            objKeys: [],
+            dbKeys: []
+        }
+    }
     return parseSelectExpr(parseExpression(func.toString()))
 }
 //happy path
@@ -24,15 +32,15 @@ function parseSelectExpr(expr: Expression): SelectParseResult {
         return parseSelectExprArrowFunc(expr);
     if(isFunctionExpression(expr))
         return parseSelectExprFunc(expr);
-    
+
     throw Error('expression must be ArrowFunctionExpression or FunctionExpression ')
-    
+
 }
 function parseSelectExprArrowFunc(expr: ArrowFunctionExpression): SelectParseResult {
     if (!isObjectExpression(expr.body))
         throw Error('body must be ObjectExpression')
 
-    return parseSelectExprBody(expr.params, expr.body);    
+    return parseSelectExprBody(expr.params, expr.body);
 }
 function parseSelectExprFunc(expr: FunctionExpression): SelectParseResult {
     if (!isBlockStatement(expr.body))
@@ -41,13 +49,13 @@ function parseSelectExprFunc(expr: FunctionExpression): SelectParseResult {
         throw new Error('expected single line return function body')
     if (!isObjectExpression(expr.body.body[0].argument))
         throw new Error('expected object expression in return statement')
-    
-    return parseSelectExprBody(expr.params, expr.body.body[0].argument);        
-        
+
+    return parseSelectExprBody(expr.params, expr.body.body[0].argument);
+
 }
 function parseSelectExprBody(params: Array<Identifier | Pattern | RestElement | TSParameterProperty>, body: ObjectExpression): SelectParseResult {
     if (params.length < 1)
-        throw Error('params < 1')    
+        throw Error('params < 1')
 
     const tableAliases = getTableAliases(params)
 
@@ -57,7 +65,7 @@ function parseSelectExprBody(params: Array<Identifier | Pattern | RestElement | 
         if (!isObjectProperty(prop))
             throw Error('expecting ObjectProperty')
 
-        objKeys = objKeys.concat(getKeys(null, prop))        
+        objKeys = objKeys.concat(getKeys(null, prop))
         dbKeys = dbKeys.concat(
           getValues(prop, {
             root: "$",
@@ -65,8 +73,9 @@ function parseSelectExprBody(params: Array<Identifier | Pattern | RestElement | 
           })
         );
     }
-    
+
     return {
+        isAllColumns: false,
         tableAliases,
         objKeys,
         dbKeys: dbKeys.map(x =>({
