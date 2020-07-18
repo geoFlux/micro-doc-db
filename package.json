@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "@babel/parser": "^7.6.4",
-    "lodash": "^4.17.15",
+    "lodash": "^4.17.19",
     "sqlite3": "^4.1.0"
   }
 }
